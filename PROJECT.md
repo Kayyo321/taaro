@@ -72,37 +72,38 @@ Elapsed project duration alone cannot reveal how much time went to writing narra
 
 Taaro acts as an opt-in coordination plane connecting local or cloud agent runtimes, repository hosting (GitHub), and existing CI or build infrastructure without taking ownership of the editor, model, or task planner.
 
-```mermaid
-flowchart LR
-    subgraph Runtimes["Agent Runtimes (Heterogeneous Tools)"]
-        W1["Producer Worker (Runtime Adapter A)"]
-        W2["Consumer Worker (Runtime Adapter B)"]
-        Solo["Fresh Solo Session (CLI / Brief / Adapter)"]
-    end
-
-    subgraph Taaro["Taaro Coordination Layer"]
-        Artifacts["Versioned Artifact Store (Provisional Fixtures)"]
-        Awareness["Awareness & Proposal Index (Scopes & Receipts)"]
-        Handoff["Handoff Assembler (Revision-Pinned Cards)"]
-    end
-
-    subgraph External["Repository & Build Infrastructure"]
-        GH["GitHub (PRs, Issues, Checks API, Merge Queue)"]
-        Proposals["Proposal Sources (Design PRs, Issues, RFCs)"]
-        CI["Existing CI & Build Systems (Runners & Cache)"]
-    end
-
-    W1 -->|"Publish provisional artifact"| Artifacts
-    W1 <-->|"Register scope & receive updates"| Awareness
-    W2 <-->|"Subscribe & enforce pre-action delivery"| Awareness
-    Artifacts -->|"Deliver immutable version"| W2
-    Solo -->|"Read-only query / copy brief"| Handoff
-
-    Proposals -->|"Indexed revisions & status"| Awareness
-    GH <-->|"Webhooks & neutral handoff check"| Handoff
-    GH <-->|"PRs, SHAs & required awareness check"| Awareness
-    Awareness -->|"Trigger combined test / join check"| CI
-    CI -->|"Exact-revision verdicts"| Handoff
+```text
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                       AGENT RUNTIMES (Heterogeneous Tools)                      │
+│                                                                                 │
+│  ┌─────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐  │
+│  │ Producer Worker     │   │ Consumer Worker      │   │ Fresh Solo Session   │  │
+│  │ (Runtime Adapter A) │   │ (Runtime Adapter B)  │   │ (CLI / Brief / Tool) │  │
+│  └──────────┬──────────┘   └──────────┬───────────┘   └──────────┬───────────┘  │
+└─────────────┼─────────────────────────┼──────────────────────────┼──────────────┘
+              │ publish provisional     ▲ subscribe, receive       ▲ read-only query
+              │ artifact & scope        │ fixture & enforce gate   │ or copy brief
+              ▼                         ▼                          │
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            TAARO COORDINATION LAYER                             │
+│                                                                                 │
+│  ┌─────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐  │
+│  │ Versioned Artifact  │◄─►│ Awareness & Proposal │──►│ Handoff Assembler    │  │
+│  │ Store (Fixtures)    │   │ Index & Receipts     │   │ (SHA-Pinned Cards)   │  │
+│  └─────────────────────┘   └──────────┬───────────┘   └──────────┬───────────┘  │
+└───────────────────────────────────────┼──────────────────────────┼──────────────┘
+              ▲                         ▲                          ▲
+              │ indexed revisions       │ PRs, SHAs, required      │ webhooks, neutral
+              │ & proposal status       │ check & combined CI      │ check & verdicts
+              │                         ▼                          ▼
+┌─────────────┴─────────────────────────┴──────────────────────────┴──────────────┐
+│                       REPOSITORY & BUILD INFRASTRUCTURE                         │
+│                                                                                 │
+│  ┌─────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐  │
+│  │ Proposal Sources    │   │ GitHub               │   │ Existing CI & Build  │  │
+│  │ (PRs, Issues, RFCs) │   │ (PRs, Checks, MQ)    │   │ (Runners & Caches)   │  │
+│  └─────────────────────┘   └──────────────────────┘   └──────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Walkthrough: Concurrent Compiler and Editor Change
@@ -120,18 +121,21 @@ Consider an illustrative compiler-and-editor project (referred to throughout thi
 
 Suppose producing the fixture takes 6 minutes, the rest of the compiler change takes 12 minutes, the editor change takes 8 minutes, and the final compatibility check takes 4 minutes:
 
-```mermaid
-flowchart TD
-    subgraph Seq["Sequential Workflow (~30 min)"]
-        S1["Compiler: Fixture (6m)"] --> S2["Compiler: Implementation (12m)"] --> S3["Editor: Implementation (8m)"] --> S4["Compatibility Check (4m)"]
-    end
+```text
+Sequential (~30 min illustrative)
+  Compiler  [Fixture 6m][== Compiler Impl 12m =]
+  Editor                                        [= Editor 8m ==]
+  CI Check                                                      [Chk 4m]
+            ├───────────┴───────────────────────┴───────────────┴───────┤
+            0m          6m                      18m             26m    30m
 
-    subgraph Par["Taaro Overlapped Workflow (~22 min)"]
-        P1["Compiler: Fixture (6m)"] --> P2["Compiler: Implementation (12m)"]
-        P1 -. "Provisional fixture at min 6" .-> P3["Editor: Implementation (8m)"]
-        P2 --> P4["Combined Check (4m)"]
-        P3 --> P4
-    end
+Overlapped with Taaro (~22 min illustrative)
+  Compiler  [Fixture 6m][== Compiler Impl 12m =]
+                        ▼ provisional fixture
+  Editor                [= Editor 8m ==]
+  CI Check                                      [Chk 4m]
+            ├───────────┴───────────────┴───────┴───────┤
+            0m          6m              14m     18m    22m
 ```
 
 **Honest baseline caveat:** These timings are illustrative. Publishing an early draft PR could achieve the same overlap. Taaro has to beat that workflow *after* accounting for the time spent publishing the fixture, revising it, and rerunning affected tests. If interface churn consumes those eight minutes, waiting for a stable interface would have been cheaper. **A narrow, executable example is a better first bet than a forecast of an entire unfinished branch.**
@@ -209,17 +213,39 @@ Proposals need a home before code exists. Teams designate existing **design PRs*
 
 Awareness checks operate at four points in a worker's lifecycle:
 
-```mermaid
-flowchart TD
-    A["Worker Action Attempt (Start / Scope Entry / Edit / Publish)"] --> B{"Lookup Complete and Index Available?"}
-    B -- "No (Error / Missing Access)" --> Hold1["HOLD Action (Fail Closed) - Await Verification"]
-    B -- "Yes" --> C{"Applicable Proposals or Active Work Matched?"}
-    C -- "No Matches" --> Allow["CLEAR Automatically - Proceed Without Prompt"]
-    C -- "Matches Found" --> D{"Current Versions Delivered in This Context Gen?"}
-    D -- "Yes (Valid Receipt)" --> Allow
-    D -- "No (Missing / Stale / Reset)" --> Hold2["HOLD Proposed Action - Inject Delta as Quoted Data"]
-    Hold2 --> Receipt["Trusted Runtime Issues Delivery Receipt"]
-    Receipt --> Reconsider["Give Worker Fresh Turn to Reconsider"]
+```text
+            ┌───────────────────────────────────────────────────────┐
+            │  Worker Action Attempt                                │
+            │  (Task Start / Scope Entry / Guarded Edit / Publish)  │
+            └───────────────────────────┬───────────────────────────┘
+                                        ▼
+            ┌───────────────────────────────────────────────────────┐
+            │  Lookup complete & index available?                   │
+            └─────────────┬───────────────────────────┬─────────────┘
+                 No       │                           │ Yes
+        (error / no auth) ▼                           ▼
+    ┌───────────────────────────┐      ┌──────────────────────────────────┐
+    │ HOLD ACTION (Fail Closed) │      │ Applicable proposals or active   │
+    │ Await verification        │      │ work matched this scope?         │
+    └───────────────────────────┘      └────────┬────────────────┬────────┘
+                                          No    │                │ Yes
+                                                ▼                ▼
+                                ┌────────────────────┐  ┌─────────────────────────┐
+                                │ CLEAR AUTOMATICALLY│  │ Current versions in     │
+                                │ Proceed silently   │  │ this context gen with   │
+                                └────────────────────┘  │ a valid receipt?        │
+                                                        └───┬─────────────────┬───┘
+                                                       Yes  │                 │ No (missing,
+                                                            ▼                 │ stale, or reset)
+                                          ┌──────────────────────┐            ▼
+                                          │ CLEAR — Proceed      │  ┌───────────────────────────┐
+                                          └──────────────────────┘  │ HOLD PROPOSED ACTION      │
+                                                                    │ 1. Inject delta as        │
+                                                                    │    quoted project data    │
+                                                                    │ 2. Runtime issues receipt │
+                                                                    │ 3. Give worker fresh turn │
+                                                                    │    to reconsider          │
+                                                                    └───────────────────────────┘
 ```
 
 1. **At task start or delegation:** Resolve the issue or intended scope if known. For connected workers, register active scope and query overlapping work in **one ordered (atomic) operation** so two simultaneous starts cannot both assume they are alone. Deliver relevant items to the *actual* worker preparing the plan, including implicit subagents. If scope is not yet known, permit discovery and resolve incrementally as paths or interfaces appear.
