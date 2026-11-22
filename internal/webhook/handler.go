@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,7 +83,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var env envelope
-	_ = json.Unmarshal(body, &env)
+	if err := json.Unmarshal(body, &env); err != nil {
+		http.Error(w, "invalid JSON payload", http.StatusBadRequest)
+		return
+	}
 
 	// Exclude the App's own check_run events to prevent self-triggering refresh loops (docs/PROJECT.md §7).
 	if event == "check_run" && h.AppID > 0 && env.CheckRun != nil && env.CheckRun.App.ID == h.AppID {
@@ -206,7 +210,7 @@ func (h *Handler) handlePullRequest(ctx context.Context, deliveryID string, body
 
 	detailsURL := ""
 	if h.PublicURL != "" {
-		detailsURL = fmt.Sprintf("%s/handoffs/%s/%s/pull/%d", strings.TrimRight(h.PublicURL, "/"), owner, repo, prNum)
+		detailsURL = fmt.Sprintf("%s/handoffs/%s/%s/pull/%d?sha=%s", strings.TrimRight(h.PublicURL, "/"), owner, repo, prNum, url.QueryEscape(headSHA))
 	}
 
 	summary := fmt.Sprintf(
@@ -281,13 +285,15 @@ func (h *Handler) dumpDelivery(deliveryID, event, sig string, body []byte, ts ti
 	if err := os.MkdirAll(h.DumpDir, 0o755); err != nil {
 		return err
 	}
-	safeID := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			return r
-		}
-		return '_'
-	}, deliveryID)
-	filename := fmt.Sprintf("%s_%s_%s.json", ts.UTC().Format("20060102T150405Z"), event, safeID)
+	safePart := func(value string) string {
+		return strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+				return r
+			}
+			return '_'
+		}, value)
+	}
+	filename := fmt.Sprintf("%s_%s_%s.json", ts.UTC().Format("20060102T150405Z"), safePart(event), safePart(deliveryID))
 
 	record := struct {
 		ReceivedAt string          `json:"received_at"`

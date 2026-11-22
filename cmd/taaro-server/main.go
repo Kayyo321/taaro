@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -86,6 +87,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		logger.Error("cannot listen", "addr", cfg.ListenAddr, "err", err)
+		os.Exit(1)
+	}
 	go func() {
 		logger.Info("starting taaro-server",
 			"addr", cfg.ListenAddr,
@@ -93,7 +99,7 @@ func main() {
 			"db", cfg.DBPath,
 			"dump_webhooks", cfg.DumpWebhooks,
 		)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("http server error", "err", err)
 			stop()
 		}
@@ -129,9 +135,14 @@ func runSetupWizard(cfg config.Config, envPath string, logger *slog.Logger) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		logger.Error("cannot listen", "addr", cfg.ListenAddr, "err", err)
+		os.Exit(1)
+	}
 	go func() {
 		logger.Info("GitHub App Manifest setup wizard listening", "url", cfg.PublicURL)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("setup server error", "err", err)
 			stop()
 		}

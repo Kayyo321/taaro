@@ -2,15 +2,19 @@ package githubapp
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -59,7 +63,6 @@ func BuildManifest(name, baseURL, webhookURL string, includeContentsRead bool) M
 			"issues",
 			"check_run",
 			"check_suite",
-			"merge_group",
 		},
 	}
 }
@@ -86,7 +89,9 @@ type SetupServer struct {
 	HTTPClient     *http.Client
 	Logger         *slog.Logger
 
+	mu             sync.Mutex
 	lastWebhookURL string
+	state          string
 }
 
 // Handler returns the HTTP handler for the manifest bootstrap flow.
@@ -95,7 +100,7 @@ func (s *SetupServer) Handler() http.Handler {
 	mux.HandleFunc("GET /", s.handleIndex)
 	mux.HandleFunc("POST /setup/start", s.handleStart)
 	mux.HandleFunc("GET /setup/callback", s.handleCallback)
-	return mux
+	return http.NewCrossOriginProtection().Handler(mux)
 }
 
 func (s *SetupServer) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +135,15 @@ func (s *SetupServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	org := strings.TrimSpace(r.FormValue("org"))
 	includeContents := r.FormValue("include_contents") == "on"
 
-	s.lastWebhookURL = webhookURL
+	u, err := url.Parse(webhookURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || strings.ContainsAny(webhookURL, "\r\n") {
+		http.Error(w, "enter an HTTPS webhook URL", http.StatusBadRequest)
+		return
+	}
+	state := rand.Text()
+	s.mu.Lock()
+	s.lastWebhookURL, s.state = webhookURL, state
+	s.mu.Unlock()
 
 	manifest := BuildManifest(appName, s.BaseURL, webhookURL, includeContents)
 	rawManifest, err := json.Marshal(manifest)
@@ -146,7 +159,7 @@ func (s *SetupServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = manifestPostTmpl.Execute(w, map[string]any{
-		"ActionURL":    actionURL,
+		"ActionURL":    actionURL + "?state=" + state,
 		"ManifestJSON": string(rawManifest),
 	})
 }
@@ -158,6 +171,13 @@ func (s *SetupServer) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == "" || r.URL.Query().Get("state") != s.state {
+		http.Error(w, "restart registration in the setup wizard", http.StatusBadRequest)
+		return
+	}
+	s.state = ""
 	conv, err := s.convertManifestCode(r.Context(), code)
 	if err != nil {
 		if s.Logger != nil {
@@ -240,7 +260,7 @@ func (s *SetupServer) writeCredentials(conv ConversionResponse) error {
 			return fmt.Errorf("create secret directory %s: %w", dir, err)
 		}
 	}
-	if err := os.WriteFile(keyPath, []byte(conv.PEM), 0o600); err != nil {
+	if err := writePrivateFile(keyPath, []byte(conv.PEM)); err != nil {
 		return fmt.Errorf("write private key %s: %w", keyPath, err)
 	}
 
@@ -280,10 +300,25 @@ TAARO_SERVER_URL=%s
 	if envPath == "" {
 		envPath = ".env"
 	}
-	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
+	if err := writePrivateFile(envPath, []byte(envContent)); err != nil {
 		return fmt.Errorf("write %s: %w", envPath, err)
 	}
 	return nil
+}
+
+// Rename a complete mode-0600 file into place, including when replacing .env.
+func writePrivateFile(path string, data []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".taaro-setup-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	_, writeErr := f.Write(data)
+	closeErr := f.Close()
+	if writeErr != nil || closeErr != nil {
+		return errors.Join(writeErr, closeErr)
+	}
+	return os.Rename(f.Name(), path)
 }
 
 var setupFormTmpl = template.Must(template.New("setupForm").Parse(`<!doctype html>
@@ -301,7 +336,7 @@ var setupFormTmpl = template.Must(template.New("setupForm").Parse(`<!doctype htm
 </head>
 <body>
   <h1>Create a local Taaro GitHub App</h1>
-  <p>This wizard uses GitHub's App Manifest flow to register a private dev app with Taaro's required permissions and save credentials to <code>{{.EnvPath}}</code> and <code>{{.PrivateKeyPath}}</code>.</p>
+  <p>This wizard uses GitHub's App Manifest flow to register a private dev app with PR and check permissions. PR access includes descriptions, comments, and diffs. The wizard saves credentials to <code>{{.EnvPath}}</code> and <code>{{.PrivateKeyPath}}</code>.</p>
   <form method="POST" action="/setup/start">
     <label for="app_name">GitHub App name</label>
     <input id="app_name" name="app_name" type="text" value="{{.DefaultName}}" required />
@@ -354,7 +389,7 @@ var setupDoneTmpl = template.Must(template.New("setupDone").Parse(`<!doctype htm
   </ul>
   <h2>Next steps</h2>
   <ol>
-    <li><a href="{{.InstallURL}}" target="_blank" rel="noreferrer">Install the App on a test repository</a>.</li>
+    <li><a href="{{.InstallURL}}" target="_blank" rel="noreferrer">Install the App on your selected repository</a>.</li>
     <li>Stop this setup server (<code>Ctrl+C</code>).</li>
     <li>Start local development: run <code>make dev</code> in one terminal and <code>make smee</code> in another.</li>
   </ol>

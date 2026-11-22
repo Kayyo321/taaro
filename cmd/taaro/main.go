@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,6 +23,11 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "init", "new":
+		if err := setupProject(os.Args[1], os.Args[2:]); err != nil && !errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "health":
 		runHealth(os.Args[2:])
 	case "context":
@@ -39,8 +45,10 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `taaro — coordination CLI for coding agents
 
 Usage:
+  taaro init --repo owner/repo
+  taaro new --repo owner/repo DIRECTORY
   taaro health [--server URL]
-  taaro context --repo owner/repo --pr NUMBER [--json] [--server URL]`)
+  taaro context [--repo owner/repo] --pr NUMBER [--json] [--server URL]`)
 }
 
 func defaultServerURL() string {
@@ -79,7 +87,19 @@ func runContext(args []string) {
 	serverURL := fs.String("server", defaultServerURL(), "taaro-server base URL")
 	_ = fs.Parse(args)
 
-	if strings.TrimSpace(*repo) == "" || *pr <= 0 {
+	if *repo == "" && *pr > 0 {
+		root, err := projectRoot(".")
+		if err == nil {
+			var p project
+			p, err = readProject(root)
+			*repo = p.Repo
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v; pass --repo owner/repo or run taaro init\n", err)
+			os.Exit(2)
+		}
+	}
+	if !validRepo(*repo) || *pr <= 0 || fs.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "error: --repo owner/repo and --pr NUMBER are required")
 		os.Exit(2)
 	}
@@ -129,7 +149,7 @@ func runContext(args []string) {
 	fmt.Printf("  head_sha:    %s (base=%s)\n", shortSHA, rec.BaseRef)
 	fmt.Printf("  last_action: %s\n", rec.LastAction)
 	fmt.Printf("  observed_at: %s\n", rec.ObservedAt.UTC().Format(time.RFC3339))
-	if rec.CheckRunID > 0 {
+	if rec.CheckRunID > 0 && rec.CheckRunHead == rec.HeadSHA {
 		fmt.Printf("  handoff_cr:  %d\n", rec.CheckRunID)
 	}
 	fmt.Printf("  url:         %s\n", rec.HTMLURL)

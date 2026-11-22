@@ -82,3 +82,33 @@ func TestSQLitePullRequestUpsertAndLookup(t *testing.T) {
 		t.Fatalf("unexpected PR record: %+v", got)
 	}
 }
+
+func TestLateCheckDoesNotReplaceCurrentHeadCheck(t *testing.T) {
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	rec := PullRequestRecord{RepoFullName: "example/repo", Number: 1}
+	for id, sha := range []string{"first", "second"} {
+		rec.HeadSHA = sha
+		if err := st.UpsertPullRequest(ctx, rec); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetPullRequest(ctx, rec.RepoFullName, 1)
+		if err != nil || got.CheckRunID != 0 {
+			t.Fatalf("stale check: %+v (%v)", got, err)
+		}
+		if err := st.RecordHandoffCheckRun(ctx, rec.RepoFullName, 1, sha, int64(id+1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.RecordHandoffCheckRun(ctx, rec.RepoFullName, 1, "first", 1); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetPullRequest(ctx, rec.RepoFullName, 1)
+	if err != nil || got.CheckRunHead != "second" || got.CheckRunID != 2 {
+		t.Fatalf("wrong current check: %+v (%v)", got, err)
+	}
+}

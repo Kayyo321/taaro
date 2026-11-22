@@ -4,9 +4,22 @@
 
 # Taaro
 
-Taaro is a proposed coordination layer for coding agents that work on the same repository. Its unit of exchange is something another worker can use directly, such as a failing input, an expected diagnostic, or a schema pinned to a revision.
+Taaro helps coding agents working in the same GitHub repository pick up each other’s work. You can add it to a project with established tests and CI, or start a new Git project with Taaro configured from its first commit. Today the CLI and local GitHub App provide PR observations and optional, revision-specific handoff checks. Fixture exchange and worker delivery are part of the design.
 
-Consider a compiler change that needs a corresponding editor update. The compiler worker can share a diagnostic fixture as soon as the output format takes shape. The editor worker can use it to exercise the renderer while the compiler work continues. If the format changes, the runtime delivers the revision to the editor worker before its next affected edit. A reviewer can then see which versions were tested together.
+## Start using Taaro
+
+Build the tools with `make build` in the Taaro source checkout and add its `bin` directory to your PATH. Use Git and the standalone `taaro` binary in your own project. Replace `acme/widgets` with the repository’s GitHub name.
+
+| Starting point | Command | Result |
+| --- | --- | --- |
+| Existing Git worktree | `taaro init --repo acme/widgets` | Adds a committable `.taaro.json` at the worktree root. Your project keeps its build, CI, and agent instructions. |
+| New project | `taaro new --repo acme/widgets widgets` | Creates the local `widgets` directory, initializes Git, and writes the same configuration. Add your application and tests, commit, and push to the named GitHub repository. |
+
+Install the App on the selected GitHub repository and start the server and webhook forwarder. After opening or updating a PR, run `taaro context --pr 1` from either project, substituting its actual PR number. The output identifies the head SHA and observation time. The two setup commands work offline. GitHub repository creation and App installation are separate steps. [Project and service setup](docs/WORKFLOW.md#using-taaro-in-your-project)
+
+## What agents can share
+
+Consider a compiler change that needs a corresponding editor update. In the proposed workflow, the compiler worker can share a diagnostic fixture as soon as the output format takes shape. The editor worker can use it to exercise the renderer while the compiler work continues. If the format changes, the runtime delivers the revision to the editor worker before its next affected edit. A reviewer can then see which versions were tested together.
 
 ## System boundaries
 

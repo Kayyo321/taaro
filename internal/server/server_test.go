@@ -75,4 +75,10 @@ func TestServerHealthAndContextAPI(t *testing.T) {
 	if pageRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 on handoff page, got %d", pageRec.Code)
 	}
+
+	stale := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(stale, httptest.NewRequest(http.MethodGet, "/handoffs/Kayyo321/taaro/pull/247?sha=old", nil))
+	if stale.Code != http.StatusGone {
+		t.Fatal("old link displayed current revision")
+	}
 }

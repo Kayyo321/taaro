@@ -48,7 +48,7 @@ type SQLiteStore struct {
 func OpenSQLite(path string) (*SQLiteStore, error) {
 	if path != ":memory:" {
 		if dir := filepath.Dir(path); dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
 				return nil, fmt.Errorf("create db directory %s: %w", dir, err)
 			}
 		}
@@ -130,6 +130,8 @@ func (s *SQLiteStore) UpsertPullRequest(ctx context.Context, rec PullRequestReco
 			base_ref = excluded.base_ref,
 			html_url = excluded.html_url,
 			installation_id = excluded.installation_id,
+			check_run_id = CASE WHEN pull_requests.check_run_head = excluded.head_sha THEN pull_requests.check_run_id ELSE 0 END,
+			check_run_head = CASE WHEN pull_requests.check_run_head = excluded.head_sha THEN pull_requests.check_run_head ELSE '' END,
 			last_action = excluded.last_action,
 			observed_at = excluded.observed_at`,
 		rec.RepoFullName,
@@ -157,11 +159,12 @@ func (s *SQLiteStore) RecordHandoffCheckRun(ctx context.Context, repoFullName st
 		ctx,
 		`UPDATE pull_requests
 		 SET check_run_id = ?, check_run_head = ?
-		 WHERE repo_full_name = ? AND pr_number = ?`,
+		 WHERE repo_full_name = ? AND pr_number = ? AND head_sha = ?`,
 		checkRunID,
 		headSHA,
 		repoFullName,
 		prNumber,
+		headSHA,
 	)
 	if err != nil {
 		return fmt.Errorf("record handoff check run %s#%d: %w", repoFullName, prNumber, err)

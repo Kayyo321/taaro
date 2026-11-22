@@ -6,6 +6,7 @@ Taaro is specified and implemented here as a coordination layer for coding agent
 
 | If the change concerns | Read together |
 | --- | --- |
+| Project adoption or creation | Exercise `taaro init` in an existing worktree and `taaro new` from a parent directory. Confirm both reach the same project-scoped context query. See [project setup](docs/WORKFLOW.md#using-taaro-in-your-project) and [adoption strategy](docs/PROJECT.md#8-ecosystem-positioning-and-adoption-strategy). |
 | Go server, CLI, webhooks, or local dev workflow | `cmd/`, `internal/`, [docs/WORKFLOW.md](docs/WORKFLOW.md), and [visibility and event rules](docs/PROJECT.md#7-trust-security-and-operational-reliability). |
 | Fixture publication, subscriptions, or CI reuse | [System model](docs/PROJECT.md#2-core-system-model-and-capabilities) and [roadmap](docs/PROJECT.md#9-implementation-roadmap). Check which phase introduces the capability. |
 | Proposal matching, delivery receipts, or branch protection | [Required awareness](docs/PROJECT.md#3-required-awareness-of-active-work-and-proposals), [runtime integration](docs/PROJECT.md#6-epistemology-provenance-and-runtime-integration), and the awareness trial in [validation](docs/PROJECT.md#10-validation-and-experimental-design). |

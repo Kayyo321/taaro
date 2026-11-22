@@ -8,6 +8,8 @@ This document defines the proposed behavior of Taaro for repository maintainers,
 
 ## 1. Overview and Motivation
 
+Taaro supports two starting points. Maintainers can integrate a repository around its current tests and CI, or create a Git project with Taaro configured before its first commit. Both use the same repository identity and GitHub App installation model. The current CLI, webhook receiver, and optional neutral handoff are available through the [project setup workflow](WORKFLOW.md#using-taaro-in-your-project). Fixture exchange, runtime mediation, and required awareness checks are roadmap capabilities.
+
 A compiler and its editor extension can be developed in parallel once both workers have an example of the diagnostic they must support. A developer returning to a bug can resume investigation once they have its input, command, and last observed result. In both cases, the useful handoff may exist before a branch is ready for review.
 
 Taaro lets a producer publish that intermediate result, records which worker consumed which version, and delivers relevant changes before the consumer acts again. A pull request (PR) gives reviewers a stable place to find the evidence as revisions change.
@@ -83,7 +85,7 @@ A handoff should fit on one screen. Put the next decision, acceptance condition,
 
 For an actionable handoff, the App publishes a completed, optional `neutral` Check Run with a Markdown summary and details URL. Update the same card for that head as evidence evolves. The required Awareness Check is a separate Check Run. Keep details available in the App for quiet or unsupported PRs and account for check retention when presenting historical records.
 
-Offer a copyable brief, a proposed read-only query such as `taaro context --pr 247`, and runtime delivery for mediated work. A parent can share a lookup across workers. Each acting worker still requires delivery in its own current context.
+Offer a copyable brief, a read-only query such as `taaro context --pr 247`, and runtime delivery for mediated work. A parent can share a lookup across workers. Each acting worker still requires delivery in its own current context.
 
 During task selection, show explicitly linked work. During implementation, deliver relevant changes at scope entry. At integration, show the common requirement that owners can divide or test. After release, link the deployed revision to its PRs, checks, and recorded decisions. Debugging or reproduction is still necessary to establish a regression’s cause.
 
@@ -140,7 +142,7 @@ Report repository outcomes such as fixture reuse, waits, and decisions changed b
 
 ## 8. Ecosystem Positioning and Adoption Strategy
 
-Start with a repository where someone already passes fixtures between tools, reconstructs a reproducer after a reset, or waits for a related branch. Connect one repository and one supported runtime. Surface an accessible reproducer, rerun it on the current checkout, and show the result and provenance. For a new repository, provide a labeled two-worker demonstration runnable with and without Taaro. The proposed onboarding target is first useful reuse within five minutes of installation. Measure real-repository activation separately from demo completion.
+Start with a repository where someone already passes fixtures between tools, reconstructs a reproducer after a reset, or waits for a related branch. Connect one repository and one supported runtime. Surface an accessible reproducer, rerun it on the current checkout, and show the result and provenance. For an existing project, `taaro init` records its GitHub name at the worktree root. For a new project, `taaro new` creates the worktree and records the same name. The maintainer adds the first application and compatibility test using the project’s chosen tools. Either project can then enter the same single-repository exchange trial. A separately labeled two-worker demonstration may illustrate the workflow. The proposed onboarding target is first useful reuse within five minutes of installation. Measure real-repository activation separately from demo completion.
 
 Link existing GitHub agent-session records, commit checkpoints such as Entire CLI records, merge queues, and deployment dashboards under their own access controls. Keep editor choice, models, task scheduling, and spending decisions with their existing owners.
 
@@ -158,6 +160,7 @@ Keep single-repository adoption inexpensive. Test demand for managed private coo
 
 | Phase | Deliverable | Acceptance evidence |
 | --- | --- | --- |
+| Project setup | Integrate an existing worktree or create a new Git project. | From both routes, query an observed PR using the committed repository identity. |
 | 1. Single-repository exchange | One supported runtime, two worktrees, a provisional fixture, a relevant proposal, one existing compatibility test, and a PR handoff. | With the ordinary task prompt, the consumer starts before the producer finishes, receives a proposal revision before its next affected action, and sees the fixture revision and check on the card. A fresh solo session reruns the same fixture on its current checkout. |
 | 2. Portability and enforcement | Repeat the exchange with a second client. Trial the required Awareness Check on a maintainer-selected branch. Add bounded combined CI with cancellation. | Demonstrate cross-client delivery without planner or prompt changes. Exercise stale evidence, missing receipts, uninstrumented contributions, and unrelated fixes independently of the portability trial. |
 | 3. Measured expansion | Consider cache sharing, cross-platform runner routing, and contract-to-consumer matching. | Select work using measured sources of delay from the first two phases. |
@@ -172,7 +175,7 @@ Recruit developers who restart sessions and teams with recurring coupled changes
 | Awareness | Exercise a pre-existing draft, a new revision on an unchanged head, delegation, scope expansion, simultaneous starts, an unchecked write route, stale receipts, and an unavailable index. Every controlled action requires current delivery or a hold. Record bypasses and latency separately. An unrelated typo requires zero acknowledgments. |
 | Handoff | Before assignment, have a maintainer define correct next actions and supporting evidence. Include timeouts and failures. Target at least 20% lower median time to a correct action with comparable correctness and no meaningful increase in rework. Analyze solo and team cohorts separately. |
 | Overlap | Compare periods with and without notices. Count eligible pairs, timely alerts, changed decisions, and interruptions. Interview both authors and sample unflagged pairs for misses. Expand only when confirmed savings exceed reading, dismissal, and administration costs. Sparse observations are inconclusive. |
-| Adoption | Record time to first real reuse, first second-client consumption, setup abandonment, voluntary use the following week, and repeat use at four weeks. Track demo completions separately. |
+| Adoption | Measure existing and newly created projects separately. Record time to first observed PR, time to first real reuse, first second-client consumption, setup abandonment, voluntary use the following week, and repeat use at four weeks. Track demo completions separately. |
 | Routine changes and release | Record author time, notices, manual steps, model cost, CI runs, and review-ready-to-merge latency. Where deployment evidence exists, also measure production lead time and follow-up fixes. Investigate slowdowns or extra CI on small fixes. Require zero additional manual steps for unrelated changes. |
 
 Report sample sizes, spread, and uncertainty. Treat thresholds as investment criteria. Compare deterministic source links with any proposed model-generated synthesis before incurring its cost. Report reviewer minutes, agent runtime, model cost, and calendar delay independently.

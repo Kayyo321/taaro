@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,9 @@ func TestBuildManifestPermissionsAndEvents(t *testing.T) {
 		m.DefaultPermissions["issues"] != "read" ||
 		m.DefaultPermissions["checks"] != "write" {
 		t.Fatalf("unexpected permissions: %+v", m.DefaultPermissions)
+	}
+	if slices.Contains(m.DefaultEvents, "merge_group") {
+		t.Fatal("merge_group requires a separate permission")
 	}
 	if _, hasContents := m.DefaultPermissions["contents"]; hasContents {
 		t.Fatalf("contents permission should be omitted by default")
@@ -62,7 +66,23 @@ func TestSetupCallbackSavesCredentials(t *testing.T) {
 		HTTPClient:     fakeGH.Client(),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/setup/callback?code=test-code", nil)
+	form := strings.NewReader("webhook_url=https%3A%2F%2Fsmee.io%2Ftest")
+	start := httptest.NewRequest(http.MethodPost, "/setup/start", form)
+	start.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	page := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(page, start)
+	if srv.state == "" || !strings.Contains(page.Body.String(), "?state="+srv.state) {
+		t.Fatal("registration form missing callback state")
+	}
+	bad := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(bad, httptest.NewRequest(http.MethodGet, "/setup/callback?code=test-code", nil))
+	if bad.Code != http.StatusBadRequest {
+		t.Fatal("accepted a callback without state")
+	}
+	if err := os.WriteFile(envPath, []byte("old config"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/setup/callback?code=test-code&state="+srv.state, nil)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -81,6 +101,10 @@ func TestSetupCallbackSavesCredentials(t *testing.T) {
 	envBytes, err := os.ReadFile(envPath)
 	if err != nil {
 		t.Fatalf("read env: %v", err)
+	}
+	info, err := os.Stat(envPath)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("expected private environment file, got %v (%v)", info, err)
 	}
 	envText := string(envBytes)
 	for _, want := range []string{"TAARO_APP_ID=12345", "TAARO_WEBHOOK_SECRET=whsec-test", "TAARO_SMEE_URL=https://smee.io/test"} {

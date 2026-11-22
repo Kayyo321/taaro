@@ -93,6 +93,10 @@ func (s *Server) handleHandoffPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sha := r.URL.Query().Get("sha"); sha != "" && sha != rec.HeadSHA {
+		http.Error(w, "this revision is no longer available locally", http.StatusGone)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = handoffPageTmpl.Execute(w, rec)
 }

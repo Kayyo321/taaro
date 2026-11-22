@@ -106,7 +106,7 @@ func TestWebhookPullRequestHandoffAndDeduplication(t *testing.T) {
 	if call.HeadSHA != "91bd80a1234567890abcdef1234567890abcdef1" {
 		t.Fatalf("unexpected head SHA: %s", call.HeadSHA)
 	}
-	if call.DetailsURL != "https://taaro.example.test/handoffs/Kayyo321/taaro/pull/247" {
+	if call.DetailsURL != "https://taaro.example.test/handoffs/Kayyo321/taaro/pull/247?sha=91bd80a1234567890abcdef1234567890abcdef1" {
 		t.Fatalf("unexpected details URL: %s", call.DetailsURL)
 	}
 
@@ -145,6 +145,14 @@ func TestWebhookPullRequestHandoffAndDeduplication(t *testing.T) {
 	if pub.count() != 2 || pub.last().ExistingCheckRun != 5001 {
 		t.Fatalf("expected update of existing check run 5001, got count=%d existing=%d", pub.count(), pub.last().ExistingCheckRun)
 	}
+	changed := bytes.ReplaceAll(payload, []byte(call.HeadSHA), []byte("abcdef1234567890abcdef1234567890abcdef12"))
+	recChanged := httptest.NewRecorder()
+	h.ServeHTTP(recChanged, newSignedRequest(t, secret, "pull_request", "deliv-003", changed))
+	h.Wait()
+	if recChanged.Code != http.StatusAccepted || pub.count() != 3 || pub.last().ExistingCheckRun != 0 {
+		t.Fatal("new head should create a separate check run")
+	}
+
 }
 
 func TestWebhookRejectsInvalidSignature(t *testing.T) {

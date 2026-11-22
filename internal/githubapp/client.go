@@ -102,7 +102,7 @@ func (c *Client) PublishHandoffCheck(ctx context.Context, in HandoffCheckInput) 
 	}
 
 	if in.ExistingCheckRun > 0 {
-		updated, _, err := cli.Checks.UpdateCheckRun(ctx, in.Owner, in.Repo, in.ExistingCheckRun, github.UpdateCheckRunOptions{
+		updated, resp, err := cli.Checks.UpdateCheckRun(ctx, in.Owner, in.Repo, in.ExistingCheckRun, github.UpdateCheckRunOptions{
 			Name:        HandoffCheckName,
 			DetailsURL:  detailsURL,
 			ExternalID:  github.Ptr(externalID),
@@ -114,7 +114,9 @@ func (c *Client) PublishHandoffCheck(ctx context.Context, in HandoffCheckInput) 
 		if err == nil {
 			return updated.GetID(), nil
 		}
-		// Fall through to creating a new check run if the recorded check run is no longer mutable.
+		if resp == nil || resp.StatusCode != http.StatusNotFound {
+			return 0, fmt.Errorf("update handoff check run: %w", err)
+		}
 	}
 
 	created, _, err := cli.Checks.CreateCheckRun(ctx, in.Owner, in.Repo, github.CreateCheckRunOptions{
