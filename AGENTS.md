@@ -1,15 +1,15 @@
 # Working on Taaro
 
-Taaro is specified here as a coordination layer for coding agents. This checkout contains Markdown and artwork. Start with the owning section of [PROJECT.md](PROJECT.md) for product behavior. Use [README.md](README.md) for the public overview and entry points. The images in `art/` are referenced by relative path from both documents.
+Taaro is specified here as a coordination layer for coding agents. This checkout contains Markdown and artwork. Start with the owning section of [docs/PROJECT.md](docs/PROJECT.md) for product behavior. Use [README.md](README.md) for the public overview and entry points. The images in `art/` are referenced by relative path from both documents.
 
 ## Where to make a change
 
 | If the change concerns | Read together |
 | --- | --- |
-| Fixture publication, subscriptions, or CI reuse | [System model](PROJECT.md#2-core-system-model-and-capabilities) and [roadmap](PROJECT.md#9-implementation-roadmap). Check which phase introduces the capability. |
-| Proposal matching, delivery receipts, or branch protection | [Required awareness](PROJECT.md#3-required-awareness-of-active-work-and-proposals), [runtime integration](PROJECT.md#6-epistemology-provenance-and-runtime-integration), and the awareness trial in [validation](PROJECT.md#10-validation-and-experimental-design). |
-| What appears on a PR or in a worker’s context | [Handoff cards](PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility), [overlap detection](PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention), and [visibility rules](PROJECT.md#7-trust-security-and-operational-reliability). |
-| Adoption, timing claims, or pilot scope | [Adoption strategy](PROJECT.md#8-ecosystem-positioning-and-adoption-strategy), [roadmap](PROJECT.md#9-implementation-roadmap), and [evaluation criteria](PROJECT.md#10-validation-and-experimental-design). |
+| Fixture publication, subscriptions, or CI reuse | [System model](docs/PROJECT.md#2-core-system-model-and-capabilities) and [roadmap](docs/PROJECT.md#9-implementation-roadmap). Check which phase introduces the capability. |
+| Proposal matching, delivery receipts, or branch protection | [Required awareness](docs/PROJECT.md#3-required-awareness-of-active-work-and-proposals), [runtime integration](docs/PROJECT.md#6-epistemology-provenance-and-runtime-integration), and the awareness trial in [validation](docs/PROJECT.md#10-validation-and-experimental-design). |
+| What appears on a PR or in a worker’s context | [Handoff cards](docs/PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility), [overlap detection](docs/PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention), and [visibility rules](docs/PROJECT.md#7-trust-security-and-operational-reliability). |
+| Adoption, timing claims, or pilot scope | [Adoption strategy](docs/PROJECT.md#8-ecosystem-positioning-and-adoption-strategy), [roadmap](docs/PROJECT.md#9-implementation-roadmap), and [evaluation criteria](docs/PROJECT.md#10-validation-and-experimental-design). |
 
 Keep detailed rules in the specification and update the README when the reader-facing contract changes. Preserve section anchors used by other documents, or update the inbound links in the same change.
 
@@ -29,6 +29,6 @@ Describe a component through its inputs, decision, and observable result. Use pr
 Run these checks from the repository root when changing documentation.
 
 1. Run `git status --short` to identify edited and newly created files. Read new documents directly because an unstaged new file is absent from `git diff`.
-2. Review `git diff -- README.md PROJECT.md AGENTS.md` and run `git diff --check` for patch whitespace. For staged changes, also use `git diff --cached` and `git diff --cached --check`.
-3. Inspect link and image references with `rg -n 'href=|src=|\]\(' README.md PROJECT.md AGENTS.md`. Resolve file paths relative to the referring document and verify fragments against the destination headings.
+2. Review `git diff -- README.md docs/PROJECT.md AGENTS.md` and run `git diff --check` for patch whitespace. For staged changes, also use `git diff --cached` and `git diff --cached --check`.
+3. Inspect link and image references with `rg -n 'href=|src=|\]\(' README.md docs/PROJECT.md AGENTS.md`. Resolve file paths relative to the referring document and verify fragments against the destination headings.
 4. Read the changed scenario end to end. Confirm that the README, normative rule, roadmap phase, and evaluation criterion describe the same behavior. The proposed `taaro context` query illustrates a product interface. This checkout has no build or test entry point.

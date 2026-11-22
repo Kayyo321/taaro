@@ -1,0 +1,22 @@
+{
+  "action": "opened",
+  "installation": {
+    "id": 9001
+  },
+  "repository": {
+    "full_name": "Kayyo321/taaro"
+  },
+  "pull_request": {
+    "number": 247,
+    "title": "Fix multiline unterminated string span",
+    "state": "open",
+    "draft": true,
+    "html_url": "https://github.com/Kayyo321/taaro/pull/247",
+    "head": {
+      "sha": "91bd80a1234567890abcdef1234567890abcdef1"
+    },
+    "base": {
+      "ref": "main"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/taaro-server ./cmd/taaro-server"
+  entrypoint = ["./tmp/taaro-server"]
+  delay = 300
+  exclude_dir = ["art", "bin", "docs", "tmp", ".data", ".git", ".secrets"]
+  exclude_file = []
+  exclude_regex = ["_test\\.go$"]
+  exclude_unchanged = true
+  follow_symlink = false
+  include_ext = ["go", "sql", "html"]
+  kill_delay = "2s"
+  log = "build-errors.log"
+  send_interrupt = true
+  stop_on_error = true
+
+[log]
+  main_only = false
+  time = false
+
+[misc]
+  clean_on_exit = true

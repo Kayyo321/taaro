@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="art/taaro.png" alt="Taaro emblem" width="96" />
+  <img src="../art/taaro.png" alt="Taaro emblem" width="96" />
 </p>
 
 # Taaro product and architecture specification

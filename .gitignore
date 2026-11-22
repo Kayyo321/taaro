@@ -1,1 +1,41 @@
+# Local design scratch artwork
 art/taaro-card/
+
+# Go build outputs and test artifacts
+/bin/
+/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Air live-reload artifacts
+build-errors.log
+
+# Secrets and local environment configuration
+.env
+.env.local
+.env.*.local
+.secrets/
+*.pem
+*.key
+
+# Local SQLite database and captured webhook payloads
+.data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

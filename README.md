@@ -23,9 +23,9 @@ A routine fix with no relevant overlap or open decision should require zero extr
 
 This repository contains the product and architecture specification. The proposed CLI and runtime integrations are design interfaces.
 
-- [System design](PROJECT.md#2-core-system-model-and-capabilities) describes artifact exchange and the conditions for reusing a check.
-- [Awareness requirements](PROJECT.md#3-required-awareness-of-active-work-and-proposals) define what the runtime must verify before an action proceeds.
-- [Handoff cards](PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility) and [overlap detection](PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention) describe what authors and reviewers see.
-- [Trust and operations](PROJECT.md#7-trust-security-and-operational-reliability) covers permissions, event processing, and data retention.
-- [Implementation roadmap](PROJECT.md#9-implementation-roadmap) and [pilot evaluation](PROJECT.md#10-validation-and-experimental-design) define the delivery sequence and how to judge its value.
+- [System design](docs/PROJECT.md#2-core-system-model-and-capabilities) describes artifact exchange and the conditions for reusing a check.
+- [Awareness requirements](docs/PROJECT.md#3-required-awareness-of-active-work-and-proposals) define what the runtime must verify before an action proceeds.
+- [Handoff cards](docs/PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility) and [overlap detection](docs/PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention) describe what authors and reviewers see.
+- [Trust and operations](docs/PROJECT.md#7-trust-security-and-operational-reliability) covers permissions, event processing, and data retention.
+- [Implementation roadmap](docs/PROJECT.md#9-implementation-roadmap) and [pilot evaluation](docs/PROJECT.md#10-validation-and-experimental-design) define the delivery sequence and how to judge its value.
 - [Contributor instructions](AGENTS.md) explain how to change and verify the specification.
