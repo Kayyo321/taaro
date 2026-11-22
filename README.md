@@ -2,8 +2,6 @@
   <img src="art/taaro-logo.png" alt="Taaro logo" width="220" />
 </p>
 
-<h1 align="center">Taaro</h1>
-
 <p align="center">
   <strong>Cross-tool intermediate result exchange, required awareness, and revision-anchored handoffs for coding agents.</strong>
 </p>
