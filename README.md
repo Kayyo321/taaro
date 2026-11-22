@@ -21,11 +21,12 @@ A routine fix with no relevant overlap or open decision should require zero extr
 
 ## Documentation
 
-This repository contains the product and architecture specification. The proposed CLI and runtime integrations are design interfaces.
+This repository contains the product and architecture specification alongside the initial Go implementation (`cmd/taaro-server` and `cmd/taaro`). Runtime adapters and later-phase capabilities remain specified in [docs/PROJECT.md](docs/PROJECT.md).
 
+- [Development workflow](docs/WORKFLOW.md) covers Go setup, one-click GitHub App registration, local webhook forwarding, testing, and debugging.
 - [System design](docs/PROJECT.md#2-core-system-model-and-capabilities) describes artifact exchange and the conditions for reusing a check.
 - [Awareness requirements](docs/PROJECT.md#3-required-awareness-of-active-work-and-proposals) define what the runtime must verify before an action proceeds.
 - [Handoff cards](docs/PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility) and [overlap detection](docs/PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention) describe what authors and reviewers see.
 - [Trust and operations](docs/PROJECT.md#7-trust-security-and-operational-reliability) covers permissions, event processing, and data retention.
 - [Implementation roadmap](docs/PROJECT.md#9-implementation-roadmap) and [pilot evaluation](docs/PROJECT.md#10-validation-and-experimental-design) define the delivery sequence and how to judge its value.
-- [Contributor instructions](AGENTS.md) explain how to change and verify the specification.
+- [Contributor instructions](AGENTS.md) explain how to change and verify both code and specification.

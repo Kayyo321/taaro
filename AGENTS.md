@@ -1,11 +1,12 @@
 # Working on Taaro
 
-Taaro is specified here as a coordination layer for coding agents. This checkout contains Markdown and artwork. Start with the owning section of [docs/PROJECT.md](docs/PROJECT.md) for product behavior. Use [README.md](README.md) for the public overview and entry points. The images in `art/` are referenced by relative path from both documents.
+Taaro is specified and implemented here as a coordination layer for coding agents. This checkout contains Go source (`cmd/`, `internal/`), Markdown documentation (`README.md`, `docs/`), and artwork (`art/`). Start with the owning section of [docs/PROJECT.md](docs/PROJECT.md) for product behavior, [docs/WORKFLOW.md](docs/WORKFLOW.md) for local Go and GitHub App setup, and [README.md](README.md) for the public overview and entry points. The images in `art/` are referenced by relative path from [README.md](README.md) and [docs/PROJECT.md](docs/PROJECT.md).
 
 ## Where to make a change
 
 | If the change concerns | Read together |
 | --- | --- |
+| Go server, CLI, webhooks, or local dev workflow | `cmd/`, `internal/`, [docs/WORKFLOW.md](docs/WORKFLOW.md), and [visibility and event rules](docs/PROJECT.md#7-trust-security-and-operational-reliability). |
 | Fixture publication, subscriptions, or CI reuse | [System model](docs/PROJECT.md#2-core-system-model-and-capabilities) and [roadmap](docs/PROJECT.md#9-implementation-roadmap). Check which phase introduces the capability. |
 | Proposal matching, delivery receipts, or branch protection | [Required awareness](docs/PROJECT.md#3-required-awareness-of-active-work-and-proposals), [runtime integration](docs/PROJECT.md#6-epistemology-provenance-and-runtime-integration), and the awareness trial in [validation](docs/PROJECT.md#10-validation-and-experimental-design). |
 | What appears on a PR or in a worker’s context | [Handoff cards](docs/PROJECT.md#4-revision-anchored-handoff-cards-and-lifecycle-utility), [overlap detection](docs/PROJECT.md#5-cross-team-overlap-detection-and-rework-prevention), and [visibility rules](docs/PROJECT.md#7-trust-security-and-operational-reliability). |
@@ -26,9 +27,10 @@ Keep detailed rules in the specification and update the README when the reader-f
 
 Describe a component through its inputs, decision, and observable result. Use proposal lifecycle terms such as `draft` or `superseded` where behavior depends on them. Keep session recaps, progress banners, and dated work summaries out of repository documentation. Identify fictional PRs and timing examples as illustrative, and present pilot thresholds as targets.
 
-Run these checks from the repository root when changing documentation.
+Run these checks from the repository root when changing code or documentation.
 
 1. Run `git status --short` to identify edited and newly created files. Read new documents directly because an unstaged new file is absent from `git diff`.
-2. Review `git diff -- README.md docs/PROJECT.md AGENTS.md` and run `git diff --check` for patch whitespace. For staged changes, also use `git diff --cached` and `git diff --cached --check`.
-3. Inspect link and image references with `rg -n 'href=|src=|\]\(' README.md docs/PROJECT.md AGENTS.md`. Resolve file paths relative to the referring document and verify fragments against the destination headings.
-4. Read the changed scenario end to end. Confirm that the README, normative rule, roadmap phase, and evaluation criterion describe the same behavior. The proposed `taaro context` query illustrates a product interface. This checkout has no build or test entry point.
+2. Review `git diff -- README.md docs/PROJECT.md docs/WORKFLOW.md AGENTS.md` and run `git diff --check` for patch whitespace. For staged changes, also use `git diff --cached` and `git diff --cached --check`.
+3. Inspect link and image references with `rg -n 'href=|src=|\]\(' README.md docs/PROJECT.md docs/WORKFLOW.md AGENTS.md`. Resolve file paths relative to the referring document and verify fragments against the destination headings.
+4. Read the changed scenario end to end. Confirm that the README, normative rule, workflow doc, roadmap phase, and evaluation criterion describe the same behavior.
+5. For Go code changes, run `make test` (`go test -race ./...`) and `make build` (`bin/taaro-server` and `bin/taaro`). Keep `.env`, `.secrets/`, and `.data/` untracked.
