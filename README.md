@@ -30,7 +30,7 @@ Consider a compiler change that needs a corresponding editor update. The compile
 | GitHub App (`internal/githubapp`, `internal/webhook`) | Presents revision-anchored neutral `Taaro Handoff` cards at an exact commit, indexes reviews/proposal issues/external checks, purges repository data on uninstall, and can publish an experimental `Taaro Awareness Check`. A merge-group candidate with unknown scope stays pending. |
 | Repository infrastructure | Retains authority over proposal decisions, CI jobs, branch protections, and release checks. |
 
-The server and its shared token assume one trusted group with access to every configured repository. The reference adapter exercises the protocol in Go. A coding runtime must route its actual file, shell, subprocess, and delegated operations through mediation and insert evidence into the acting worker’s context before issuing a receipt. Use the single-repository pilot to verify those routes before relying on enforcement.
+The server and its shared token assume one trusted group with access to every configured repository. The reference adapter exercises the protocol in Go. A coding runtime must route its actual file, shell, subprocess, and delegated operations through mediation and insert evidence into the acting worker’s context before issuing a receipt. The Codex CLI pilot guards one selected text file, including staged shell edits and a separately identified child worker. [Run the Codex pilot](docs/CODEX_PILOT.md)
 
 A routine fix with a complete lookup and no relevant overlap, open decision, or stale fixture clears silently with zero extra prompts or acknowledgments. The design targets repositories with coupled changes and developers who need to resume unfinished work across sessions.
 
@@ -38,6 +38,7 @@ A routine fix with a complete lookup and no relevant overlap, open decision, or 
 
 This repository contains the Taaro 1.0.0 Go implementation (`cmd/taaro-server`, `cmd/taaro`, `internal/`), Adapter Protocol v1 specification, and product architecture specification.
 
+- [Production pilot sequence](docs/WORKFLOW.md#from-source-checkout-to-a-live-pilot) covers publishing the candidate, deploying the server, installing the App, and exercising a real PR.
 - [Development workflow](docs/WORKFLOW.md) covers Go setup, one-click GitHub App registration, local webhook forwarding, CLI workflows, testing, and debugging.
 - [Adapter Protocol v1](docs/PROTOCOL.md) specifies the HTTP API across integration levels 1–3, receipt isolation, quoted-data rules, and conformance testing (`make conformance`).
 - [System design](docs/PROJECT.md#2-core-system-model-and-capabilities) describes artifact exchange and the conditions for reusing a check.
