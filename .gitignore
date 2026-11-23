@@ -32,6 +32,9 @@ build-errors.log
 *.db-shm
 *.db-wal
 
+# Python runtime integration bytecode
+__pycache__/
+
 # OS and editor metadata
 .DS_Store
 Thumbs.db

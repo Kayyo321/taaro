@@ -62,6 +62,8 @@ Mediate protected runtime operations and attest delivery to the acting worker.
 
 The reference session models worker context in memory. A production runtime must deliver the quoted data into the actual worker context, discard held edits and route every claimed operation through the adapter. The shared token identifies a trusted client of the service and the client supplies the worker identity.
 
+The [Codex CLI pilot](CODEX_PILOT.md) implements delivery into a real worker turn for one selected file. A planner and a delegated editor receive separate worker identities and context generations.
+
 Run the Level 1–3 conformance suite against the reference adapter (`internal/adapter`):
 
 ```bash
