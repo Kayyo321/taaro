@@ -112,3 +112,102 @@ func TestLateCheckDoesNotReplaceCurrentHeadCheck(t *testing.T) {
 		t.Fatalf("wrong current check: %+v (%v)", got, err)
 	}
 }
+
+func TestPullRequestClearsRemovedFieldsAndStalePaths(t *testing.T) {
+	st, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	pr := PullRequestRecord{RepoFullName: "o/r", Number: 1, HeadSHA: "one", Body: "old", Labels: []string{"proposal"}, LinkedIssues: []int{7}, Paths: []string{"old.go"}}
+	if err := st.UpsertPullRequest(ctx, pr); err != nil {
+		t.Fatal(err)
+	}
+	pr.HeadSHA = "two"
+	pr.Body = ""
+	pr.Labels = []string{}
+	pr.LinkedIssues = []int{}
+	pr.Paths = nil
+	if err := st.UpsertPullRequest(ctx, pr); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetPullRequest(ctx, "o/r", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "" || len(got.Labels) != 0 || len(got.LinkedIssues) != 0 || got.Paths != nil {
+		t.Fatalf("stale fields: %+v", got)
+	}
+}
+
+func TestPendingWebhookSurvivesRestartAndRetries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "queue.db")
+	s, err := OpenSQLite(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	d := DeliveryRecord{DeliveryID: "guid", Event: "issues", RepoFullName: "a/b", InstallationID: 123, Payload: []byte("{}")}
+	if _, err := s.RecordDelivery(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = OpenSQLite(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Now()
+	next, err := s.NextDelivery(ctx, now)
+	if err != nil || next.DeliveryID != d.DeliveryID || string(next.Payload) != "{}" {
+		t.Fatalf("restart: %+v %v", next, err)
+	}
+	if err := s.FinishDelivery(ctx, d.DeliveryID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NextDelivery(ctx, now); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("retry backoff: %v", err)
+	}
+	if _, err := s.NextDelivery(ctx, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	repos, err := s.ListInstallationRepositories(ctx, 123)
+	if err != nil || len(repos) != 1 || repos[0] != "a/b" {
+		t.Fatalf("installation map: %v %v", repos, err)
+	}
+	if err := s.PurgeRepository(ctx, "a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NextDelivery(ctx, now.Add(time.Hour)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("purged payload: %v", err)
+	}
+}
+
+func TestSubscriptionReturnsPersistedConsumption(t *testing.T) {
+	s, err := OpenSQLite(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	sub := ArtifactSubscription{RepoFullName: "a/b", ArtifactKey: "fixture", WorkerID: "w", ContextGeneration: 1, ConsumedVersion: 1, ConsumerRev: "abc"}
+	if _, err = s.UpsertArtifactSubscription(ctx, sub); !errors.Is(err, ErrInvalidSubscription) {
+		t.Fatalf("accepted unpublished version: %v", err)
+	}
+	if _, _, err = s.PublishArtifact(ctx, ArtifactRecord{RepoFullName: "a/b", ArtifactKey: "fixture", ProducerRev: "123"}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.UpsertArtifactSubscription(ctx, sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub.ConsumedVersion = 0
+	sub.ConsumerRev = ""
+	replay, err := s.UpsertArtifactSubscription(ctx, sub)
+	if err != nil || replay != saved {
+		t.Fatalf("subscribe again: %+v, wanted %+v: %v", replay, saved, err)
+	}
+}
