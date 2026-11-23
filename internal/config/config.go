@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -28,6 +29,7 @@ type Config struct {
 	DBPath               string
 	DumpWebhooks         string
 	APIToken             string
+	Repository           string
 	EnableAwarenessCheck bool
 	LogLevel             slog.Level
 }
@@ -53,6 +55,7 @@ func Load(envFile string) (Config, error) {
 		DBPath:               envOrDefault("TAARO_DB_PATH", filepath.Join(".data", "taaro.db")),
 		DumpWebhooks:         resolveDumpDir(os.Getenv("TAARO_DUMP_WEBHOOKS")),
 		APIToken:             strings.TrimSpace(os.Getenv("TAARO_API_TOKEN")),
+		Repository:           strings.TrimSpace(os.Getenv("TAARO_REPOSITORY")),
 		EnableAwarenessCheck: parseBoolEnv(os.Getenv("TAARO_ENABLE_AWARENESS_CHECK")),
 		LogLevel:             parseLogLevel(os.Getenv("TAARO_LOG_LEVEL")),
 	}
@@ -76,9 +79,23 @@ func (c Config) ValidateServer() error {
 	if c.APIToken == "" && !c.LoopbackOnly() {
 		return errors.New("TAARO_API_TOKEN is required with a non-loopback listen address or public URL")
 	}
+	if c.Repository != "" {
+		if !repositoryName.MatchString(c.Repository) || strings.HasSuffix(c.Repository, "/.") || strings.HasSuffix(c.Repository, "/..") {
+			return errors.New("TAARO_REPOSITORY must use the GitHub owner/repo format")
+		}
+		if c.APIToken == "" {
+			return errors.New("TAARO_API_TOKEN is required with TAARO_REPOSITORY")
+		}
+		public, err := url.Parse(c.PublicURL)
+		if !c.LoopbackOnly() && (err != nil || public.Scheme != "https" || public.Hostname() == "" || public.User != nil) {
+			return errors.New("an externally accessible scoped deployment requires an HTTPS TAARO_PUBLIC_URL")
+		}
+	}
 
 	return nil
 }
+
+var repositoryName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$`)
 
 // LoopbackOnly reports whether both the listener and advertised URL are local.
 func (c Config) LoopbackOnly() bool {

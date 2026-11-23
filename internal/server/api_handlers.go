@@ -16,7 +16,7 @@ import (
 	"github.com/Kayyo321/taaro/internal/store"
 )
 
-func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+func (s *Server) decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxAPIBodyBytes+1))
 	if err != nil {
 		http.Error(w, "failed reading request body", http.StatusBadRequest)
@@ -30,12 +30,22 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 		http.Error(w, fmt.Sprintf("invalid JSON body: %v", err), http.StatusBadRequest)
 		return false
 	}
+	if s.Repository != "" {
+		var identity struct {
+			Repo string `json:"repo"`
+		}
+		if err := json.Unmarshal(body, &identity); err != nil {
+			http.Error(w, "invalid repository in JSON body", http.StatusBadRequest)
+			return false
+		}
+		return s.allowRepository(w, identity.Repo)
+	}
 	return true
 }
 
 func (s *Server) handlePublishArtifact(w http.ResponseWriter, r *http.Request) {
 	var req store.ArtifactRecord
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.RepoFullName) == "" || strings.TrimSpace(req.ArtifactKey) == "" || strings.TrimSpace(req.ProducerRev) == "" {
@@ -101,7 +111,7 @@ func (s *Server) handleGetOrListArtifacts(w http.ResponseWriter, r *http.Request
 
 func (s *Server) handleSubscribeArtifact(w http.ResponseWriter, r *http.Request) {
 	var req store.ArtifactSubscription
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.RepoFullName) == "" || strings.TrimSpace(req.ArtifactKey) == "" ||
@@ -139,7 +149,7 @@ func (s *Server) handleListArtifactConsumers(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) handleRecordCheck(w http.ResponseWriter, r *http.Request) {
 	var req store.ValidationCheckRecord
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	rec, cancelled, err := s.engine().RecordValidationCheck(r.Context(), req)
@@ -181,7 +191,7 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMatchCheck(w http.ResponseWriter, r *http.Request) {
 	var req coordination.MatchCheckRequest
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	resp, err := s.engine().MatchEligibleCheck(r.Context(), req)
@@ -194,7 +204,7 @@ func (s *Server) handleMatchCheck(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpsertProposal(w http.ResponseWriter, r *http.Request) {
 	var req store.ProposalRecord
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	if strings.TrimSpace(req.RepoFullName) == "" || strings.TrimSpace(req.ProposalKey) == "" || strings.TrimSpace(req.Title) == "" {
@@ -280,7 +290,7 @@ func (s *Server) handleRegisterScope(w http.ResponseWriter, r *http.Request) {
 		TTLSeconds        int      `json:"ttl_seconds,omitempty"`
 		Audience          string   `json:"audience,omitempty"`
 	}
-	if !decodeJSONBody(w, r, &body) {
+	if !s.decodeJSONBody(w, r, &body) {
 		return
 	}
 	aud := body.Audience
@@ -310,7 +320,7 @@ func (s *Server) handleRegisterScope(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEvaluateAction(w http.ResponseWriter, r *http.Request) {
 	var req coordination.EvaluateActionRequest
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Audience == "" || s.requestAudience(r) == "public" {
@@ -331,7 +341,7 @@ func (s *Server) handleRecordReceipt(w http.ResponseWriter, r *http.Request) {
 		ContextGeneration int                 `json:"context_generation"`
 		Items             []store.ReceiptItem `json:"items"`
 	}
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	rec, err := s.engine().RecordReceipt(r.Context(), req.RepoFullName, req.WorkerID, req.ContextGeneration, req.Items)
@@ -347,7 +357,7 @@ func (s *Server) handleVerifyCandidate(w http.ResponseWriter, r *http.Request) {
 		coordination.CandidateAwarenessRequest
 		Publish bool `json:"publish,omitempty"`
 	}
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	if req.Audience == "" || s.requestAudience(r) == "public" {
@@ -475,7 +485,7 @@ func (s *Server) handleAckOverlap(w http.ResponseWriter, r *http.Request) {
 		Actor        string `json:"actor,omitempty"`
 		Note         string `json:"note,omitempty"`
 	}
-	if !decodeJSONBody(w, r, &req) {
+	if !s.decodeJSONBody(w, r, &req) {
 		return
 	}
 	ack, err := s.engine().AcknowledgeOverlap(r.Context(), req.RepoFullName, req.PRA, req.PRB, req.Disposition, req.Actor, req.Note)

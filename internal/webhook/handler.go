@@ -36,6 +36,7 @@ type PullRequestReconciler interface {
 
 type Handler struct {
 	Reconciler           PullRequestReconciler
+	Repository           string
 	prMu                 sync.Mutex
 	AppID                int64
 	WebhookSecret        string
@@ -100,16 +101,40 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	observedAt := h.now()
 
-	if h.DumpDir != "" {
-		if err := h.dumpDelivery(deliveryID, event, sigHeader, body, observedAt); err != nil && h.Logger != nil {
-			h.Logger.Warn("failed dumping webhook delivery", "delivery_id", deliveryID, "err", err)
-		}
-	}
-
 	var env envelope
 	if err := json.Unmarshal(body, &env); err != nil {
 		http.Error(w, "invalid JSON payload", http.StatusBadRequest)
 		return
+	}
+
+	// Installation-wide events describe repository lists instead of a single repository.
+	dump := h.DumpDir != ""
+	if h.Repository != "" {
+		switch event {
+		case "installation", "installation_repositories":
+			dump = false
+			body, err = h.scopedInstallationPayload(event, body)
+			if err != nil {
+				http.Error(w, "invalid installation webhook payload", http.StatusBadRequest)
+				return
+			}
+			env.Repository.FullName = ""
+		case "ping":
+			dump = false
+			body = []byte("{}")
+			env.Repository.FullName = ""
+		default:
+			if env.Repository.FullName != h.Repository {
+				writeJSON(w, http.StatusOK, map[string]string{"status": "ignored_outside_repository"})
+				return
+			}
+		}
+	}
+
+	if dump {
+		if err := h.dumpDelivery(deliveryID, event, sigHeader, body, observedAt); err != nil && h.Logger != nil {
+			h.Logger.Warn("failed dumping webhook delivery", "delivery_id", deliveryID, "err", err)
+		}
 	}
 
 	// Exclude the App's own check_run events to prevent self-triggering refresh loops (docs/PROJECT.md §7).
@@ -518,6 +543,9 @@ func (h *Handler) handleInstallation(ctx context.Context, deliveryID string, bod
 		}
 	}
 	for name := range names {
+		if h.Repository != "" && name != h.Repository {
+			continue
+		}
 		if removing {
 			if err := h.Store.PurgeRepository(ctx, name); err != nil {
 				return err
@@ -538,14 +566,14 @@ func (h *Handler) handleInstallationRepositories(ctx context.Context, deliveryID
 		return err
 	}
 	for _, repo := range payload.RepositoriesAdded {
-		if repo.FullName != "" && payload.Installation.ID > 0 {
+		if repo.FullName != "" && (h.Repository == "" || repo.FullName == h.Repository) && payload.Installation.ID > 0 {
 			if err := h.Store.RegisterInstallationRepository(ctx, payload.Installation.ID, repo.FullName); err != nil {
 				return err
 			}
 		}
 	}
 	for _, repo := range payload.RepositoriesRemoved {
-		if repo.FullName == "" {
+		if repo.FullName == "" || (h.Repository != "" && repo.FullName != h.Repository) {
 			continue
 		}
 		if err := h.Store.PurgeRepository(ctx, repo.FullName); err != nil {
@@ -553,6 +581,33 @@ func (h *Handler) handleInstallationRepositories(ctx context.Context, deliveryID
 			return err
 		} else {
 			h.logInfo("purged repository data after installation_repositories removal", "repo", repo.FullName)
+		}
+	}
+	return nil
+}
+
+func (h *Handler) scopedInstallationPayload(event string, body []byte) ([]byte, error) {
+	if event == "installation" {
+		var payload installationPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil, err
+		}
+		payload.Repositories = h.filterRepositories(payload.Repositories)
+		return json.Marshal(payload)
+	}
+	var payload installationReposPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	payload.RepositoriesAdded = h.filterRepositories(payload.RepositoriesAdded)
+	payload.RepositoriesRemoved = h.filterRepositories(payload.RepositoriesRemoved)
+	return json.Marshal(payload)
+}
+
+func (h *Handler) filterRepositories(repositories []installationRepository) []installationRepository {
+	for _, repo := range repositories {
+		if repo.FullName == h.Repository {
+			return []installationRepository{repo}
 		}
 	}
 	return nil
@@ -976,21 +1031,19 @@ type installationPayload struct {
 	Installation struct {
 		ID int64 `json:"id"`
 	} `json:"installation"`
-	Action       string `json:"action"`
-	Repositories []struct {
-		FullName string `json:"full_name"`
-	} `json:"repositories"`
+	Action       string                   `json:"action"`
+	Repositories []installationRepository `json:"repositories"`
 }
 
 type installationReposPayload struct {
 	Installation struct {
 		ID int64 `json:"id"`
 	} `json:"installation"`
-	RepositoriesAdded []struct {
-		FullName string `json:"full_name"`
-	} `json:"repositories_added"`
-	Action              string `json:"action"`
-	RepositoriesRemoved []struct {
-		FullName string `json:"full_name"`
-	} `json:"repositories_removed"`
+	RepositoriesAdded   []installationRepository `json:"repositories_added"`
+	Action              string                   `json:"action"`
+	RepositoriesRemoved []installationRepository `json:"repositories_removed"`
+}
+
+type installationRepository struct {
+	FullName string `json:"full_name"`
 }

@@ -887,26 +887,7 @@ func (s *SQLiteStore) PurgeRepository(ctx context.Context, repoFullName string) 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	tables := []string{
-		"handoff_refreshes",
-		"proposal_awareness_refresh",
-		"awareness_publication_watermarks",
-		"installation_repositories",
-		"webhook_deliveries",
-		"pull_requests",
-		"pull_request_revisions",
-		"pull_request_reviews",
-		"external_check_runs",
-		"artifacts",
-		"artifact_subscriptions",
-		"validation_checks",
-		"proposals",
-		"worker_scopes",
-		"delivery_receipts",
-		"awareness_evaluations",
-		"overlap_acknowledgments",
-	}
-	for _, tbl := range tables {
+	for _, tbl := range repositoryTables {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+tbl+" WHERE repo_full_name = ?", repoFullName); err != nil {
 			return fmt.Errorf("purge %s from %s: %w", repoFullName, tbl, err)
 		}

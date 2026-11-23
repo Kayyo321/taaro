@@ -29,6 +29,7 @@ type Server struct {
 	AppID              int64
 	PublicURL          string
 	APIToken           string
+	Repository         string
 	Store              store.Store
 	Engine             *coordination.Engine
 	WebhookHandler     *webhook.Handler
@@ -98,8 +99,29 @@ func (s *Server) withAPIAuth(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && s.Repository != "" {
+			repo := strings.TrimSpace(r.URL.Query().Get("repo"))
+			if owner := r.PathValue("owner"); owner != "" {
+				repo = owner + "/" + r.PathValue("repo")
+			}
+			if !s.allowRepository(w, repo) {
+				return
+			}
+		}
 		next(w, r)
 	}
+}
+
+func (s *Server) allowRepository(w http.ResponseWriter, repo string) bool {
+	if s.Repository == "" || repo == s.Repository {
+		return true
+	}
+	if repo == "" {
+		http.Error(w, "repository is required", http.StatusBadRequest)
+	} else {
+		http.Error(w, "repository is outside this instance's scope", http.StatusNotFound)
+	}
+	return false
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {

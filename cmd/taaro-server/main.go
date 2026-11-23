@@ -61,6 +61,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer st.Close()
+	if err := st.ValidateRepositoryScope(context.Background(), cfg.Repository); err != nil {
+		logger.Error("database is incompatible with the configured repository scope", "err", err)
+		os.Exit(1)
+	}
 
 	var (
 		reconciler         webhook.PullRequestReconciler
@@ -91,6 +95,7 @@ func main() {
 
 	wh := &webhook.Handler{
 		Reconciler:           reconciler,
+		Repository:           cfg.Repository,
 		AppID:                cfg.AppID,
 		WebhookSecret:        cfg.WebhookSecret,
 		PublicURL:            cfg.PublicURL,
@@ -104,6 +109,7 @@ func main() {
 	}
 
 	srv := &server.Server{
+		Repository:         cfg.Repository,
 		AppID:              cfg.AppID,
 		PublicURL:          cfg.PublicURL,
 		APIToken:           cfg.APIToken,
