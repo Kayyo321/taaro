@@ -4,13 +4,16 @@ TAARO_SMEE_URL ?= $(call dotenv,TAARO_SMEE_URL)
 TAARO_LISTEN_ADDR ?= $(call dotenv,TAARO_LISTEN_ADDR)
 export TAARO_SMEE_URL
 
+VERSION ?= 1.0.0
+LDFLAGS := -ldflags "-X github.com/Kayyo321/taaro/internal/version.Version=$(VERSION)"
+
 BIN_DIR := bin
 SERVER_BIN := $(BIN_DIR)/taaro-server
 CLI_BIN := $(BIN_DIR)/taaro
 LISTEN_ADDR ?= $(or $(TAARO_LISTEN_ADDR),127.0.0.1:8080)
 TARGET_URL ?= http://$(LISTEN_ADDR)/webhooks/github
 
-.PHONY: help install-tools setup dev server smee tunnel build test tidy clean
+.PHONY: help install-tools setup dev server smee tunnel build test conformance tidy clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
@@ -37,11 +40,14 @@ tunnel: ## Expose local server via cloudflared (for clickable details_url in a p
 
 build: ## Build server and CLI binaries into ./bin
 	@mkdir -p $(BIN_DIR)
-	go build -o $(SERVER_BIN) ./cmd/taaro-server
-	go build -o $(CLI_BIN) ./cmd/taaro
+	go build $(LDFLAGS) -o $(SERVER_BIN) ./cmd/taaro-server
+	go build $(LDFLAGS) -o $(CLI_BIN) ./cmd/taaro
 
 test: ## Run all Go tests with race detector
 	go test -race ./...
+
+conformance: ## Run Adapter Protocol v1 conformance suite (Levels 1-3)
+	go test -race -v ./internal/adapter/...
 
 tidy: ## Clean up go.mod and go.sum
 	go mod tidy
