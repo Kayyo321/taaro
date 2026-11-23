@@ -24,6 +24,12 @@ import (
 
 func main() {
 	setupMode := flag.Bool("setup", false, "run the GitHub App Manifest registration wizard")
+	webhookStatus := flag.Bool("webhook-status", false, "inspect local and GitHub webhook deliveries")
+	webhookAlert := flag.Bool("webhook-alert", false, "exit nonzero for webhook failures")
+	webhookLookback := flag.Duration("webhook-lookback", 24*time.Hour, "GitHub delivery lookback window")
+	localOnly := flag.Bool("webhook-status-local-only", false, "inspect only the local webhook queue")
+	backupPath := flag.String("backup", "", "snapshot SQLite to a new destination file")
+	restorePath := flag.String("restore", "", "restore a trusted SQLite backup to a new configured database path")
 	showVersion := flag.Bool("version", false, "print taaro-server version and exit")
 	envFile := flag.String("env", ".env", "path to optional .env file")
 	flag.Parse()
@@ -37,6 +43,37 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *backupPath != "" || *restorePath != "" {
+		if (*backupPath != "" && *restorePath != "") || *setupMode || *webhookStatus || *webhookAlert || *localOnly || flag.NArg() != 0 {
+			fmt.Fprintln(os.Stderr, "use exactly one database copy mode")
+			os.Exit(2)
+		}
+		source, destination := cfg.DBPath, *backupPath
+		if *restorePath != "" {
+			source, destination = *restorePath, cfg.DBPath
+		}
+		if err := store.CopySQLite(context.Background(), source, destination); err != nil {
+			fmt.Fprintln(os.Stderr, "copy database:", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Validated database copy written to %s\n", destination)
+		return
+	}
+
+	if *webhookStatus || *localOnly || *webhookAlert {
+		if *webhookLookback <= 0 {
+			fmt.Fprintln(os.Stderr, "webhook lookback must be positive")
+			os.Exit(1)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := printWebhookStatus(ctx, os.Stdout, cfg.DBPath, cfg.AppID, cfg.PrivateKeyPath, *localOnly, *webhookAlert, time.Now().Add(-*webhookLookback)); err != nil {
+			fmt.Fprintln(os.Stderr, "webhook status:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))

@@ -1,0 +1,25 @@
+[Unit]
+Description=Taaro coordination server
+After=network.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=taaro
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/taaro
+LoadCredential=taaro.env:/etc/taaro/server.env
+LoadCredential=github.pem:/etc/taaro/github.pem
+Environment=TAARO_DB_PATH=/var/lib/taaro/taaro.db
+Environment=TAARO_PRIVATE_KEY_PATH=%d/github.pem
+Environment=TAARO_LISTEN_ADDR=127.0.0.1:8080
+ExecStart=/usr/local/bin/taaro-server -env %d/taaro.env
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
