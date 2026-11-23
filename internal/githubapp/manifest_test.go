@@ -19,8 +19,8 @@ func TestBuildManifestPermissionsAndEvents(t *testing.T) {
 		m.DefaultPermissions["checks"] != "write" {
 		t.Fatalf("unexpected permissions: %+v", m.DefaultPermissions)
 	}
-	if slices.Contains(m.DefaultEvents, "merge_group") {
-		t.Fatal("merge_group requires a separate permission")
+	if !slices.Contains(m.DefaultEvents, "merge_group") || m.DefaultPermissions["merge_queues"] != "read" {
+		t.Fatal("merge_group requires merge queues read permission")
 	}
 	if _, hasContents := m.DefaultPermissions["contents"]; hasContents {
 		t.Fatalf("contents permission should be omitted by default")

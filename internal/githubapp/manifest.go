@@ -42,6 +42,7 @@ func BuildManifest(name, baseURL, webhookURL string, includeContentsRead bool) M
 		"pull_requests": "read",
 		"issues":        "read",
 		"checks":        "write",
+		"merge_queues":  "read",
 	}
 	if includeContentsRead {
 		perms["contents"] = "read"
@@ -60,6 +61,7 @@ func BuildManifest(name, baseURL, webhookURL string, includeContentsRead bool) M
 		DefaultEvents: []string{
 			"pull_request",
 			"pull_request_review",
+			"merge_group",
 			"issues",
 			"check_run",
 			"check_suite",
