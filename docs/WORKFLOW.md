@@ -12,20 +12,23 @@ From the Taaro **source checkout**, run `make build` with the Go toolchain liste
 
 **Connect either project.** An operator runs the App setup, server, and webhook forwarding commands below from the Taaro source checkout. Select the target repository in the App installation settings. PR read permission exposes descriptions, comments, and diffs. Keep service credentials in the operator’s checkout. The project file contains only the GitHub repository name.
 
-**Verify the connection.** Run `taaro health`, then open or update a PR and run `taaro context --pr NUMBER` inside the configured project. Compare the reported head with the PR on GitHub. A 404 means the server has no observation for that repository and number yet. Installation alone does not backfill existing PRs. The local server stores the latest observation it processed. Recovery of missed or out-of-order events and durable retry of failed Check Run publication are roadmap work. If the server is on a different address, pass `--server URL` or export `TAARO_SERVER_URL` in the CLI’s shell.
+**Verify the connection.** Run `taaro health`, then open or update a PR and run `taaro context --pr NUMBER` inside the configured project. Compare the reported head with the PR on GitHub. A 404 means the server has no observation for that repository and number yet. Installation alone does not backfill existing PRs. With installation credentials, PR and proposal issue deliveries refresh current state from GitHub. Accepted deliveries survive a server restart and processing failures retry from SQLite. Deliveries that never reached the server require GitHub redelivery. If the server is on a different address, pass `--server URL` or export `TAARO_SERVER_URL` in the CLI’s shell.
 
 ## Repository layout
 
 | Path | Responsibility |
 | --- | --- |
-| `cmd/taaro-server` | HTTP server binary hosting the GitHub App webhook endpoint, Manifest setup wizard (`-setup`), handoff pages, and coordination API. |
-| `cmd/taaro` | Standalone CLI binary for project setup (`init`, `new`) and queries (`health`, `context`). |
-| `internal/config` | Loads `.env` (without overriding exported variables) and parses runtime configuration. |
-| `internal/store` | `Store` interface and embedded pure-Go SQLite implementation (`modernc.org/sqlite`) for delivery deduplication and observed PR records. |
-| `internal/githubapp` | GitHub App Manifest setup wizard and installation-authenticated GitHub client (`ghinstallation/v2` + `go-github/v88`). |
-| `internal/webhook` | `POST /webhooks/github` handler: HMAC-SHA256 verification, optional payload capture, self-`check_run` filtering, SQLite deduplication, `202 Accepted` acknowledgment, and async Check Run publishing. |
-| `internal/server` | Stdlib `net/http` router wiring `/healthz`, `/webhooks/github`, `/api/v1/context`, and `/handoffs/{owner}/{repo}/pull/{number}`. |
-| `Makefile` & `.air.toml` | Local dev tasks and live-reload configuration for `cmd/taaro-server`. |
+| `cmd/taaro-server` | HTTP server binary hosting the GitHub App webhook endpoint, Manifest setup wizard (`-setup`), version flag (`-version`), handoff pages, and Coordination API v1. |
+| `cmd/taaro` | Standalone CLI binary for project setup (`init`, `new`), version, queries (`health`, `context`), immutable artifacts (`artifact`), proposals (`proposal`), scopes (`scope`), awareness mediation (`awareness`), overlaps (`overlap`), and checks (`check`). |
+| `internal/version` | Semantic version (`1.0.0`) and Adapter Protocol version (`1`). |
+| `internal/config` | Loads `.env` (without overriding exported variables) and parses runtime configuration (including optional `TAARO_API_TOKEN` and `TAARO_ENABLE_AWARENESS_CHECK`). |
+| `internal/store` | `Store` interface and embedded pure-Go SQLite implementation (`modernc.org/sqlite`) for webhook deduplication, PR revisions, reviews, external check runs, immutable artifacts, subscriptions, validation checks, proposals, atomic worker scopes, delivery receipts, awareness evaluations, overlap acknowledgments, and repository purge. |
+| `internal/coordination` | Deterministic matching engine (issue-link extraction, path/interface matching, lockfile suppression), awareness mediation, check-reuse identity & speculative cancellation, overlap detection, and revision-anchored handoff assembly. |
+| `internal/githubapp` | GitHub App Manifest setup wizard and installation-authenticated GitHub client (`ghinstallation/v2` + `go-github/v88`) publishing neutral `Taaro Handoff` checks and required `Taaro Awareness Check` runs. |
+| `internal/webhook` | `POST /webhooks/github` handler: HMAC-SHA256 verification, optional payload capture, self-`check_run` filtering, SQLite deduplication, `202 Accepted` acknowledgment, and async ingestion of `pull_request`, `pull_request_review`, `issues` (proposal labels), external `check_run`, `merge_group`, and `installation`/`installation_repositories` purge events. |
+| `internal/server` | Stdlib `net/http` router wiring `/healthz`, `/webhooks/github`, `/handoffs/{owner}/{repo}/pull/{number}`, and the `/api/v1/*` Coordination API (with optional Bearer auth). |
+| `internal/adapter` | Reference Go runtime adapter implementing Adapter Protocol v1 across Levels 1–3 plus the conformance test suite (`make conformance`). |
+| `Makefile` & `.air.toml` | Local dev tasks, build targets with version ldflags, conformance target, and live-reload configuration for `cmd/taaro-server`. |
 
 ## Prerequisites
 
@@ -67,9 +70,10 @@ An operator can register one private development App and install it on selected 
 | `pull_requests` | `read` | Read PR state, diffs, threads, and head SHAs. |
 | `issues` | `read` | Resolve linked goals, labels, and proposal issues. |
 | `checks` | `write` | Publish the optional neutral `Taaro Handoff` check. |
+| `merge_queues` | `read` | Receive merge-group check requests. |
 | `contents` | `read` *(optional)* | Read versioned RFC files when enabled. |
 
-The default App subscribes to `pull_request`, `pull_request_review`, `issues`, `check_run`, `check_suite` (GitHub sends `installation` and `installation_repositories` automatically). The local server processes PR events, filters its own check events, and records the other deliveries. Merge-group awareness belongs to the later branch-protection trial and requires a separate permission. [GitHub webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads#merge_group)
+The default App subscribes to `pull_request`, `pull_request_review`, `issues`, `check_run`, `check_suite`, and `merge_group` (GitHub sends `installation` and `installation_repositories` automatically). The server indexes PR revisions, reviews, proposal-labeled issues, and external check runs, filters its own check events, and purges stored repository data when an installation or repository is removed. `merge_group` events are also handled once enabled in GitHub App settings for the branch-protection trial (`TAARO_ENABLE_AWARENESS_CHECK=1`). [GitHub webhook events](https://docs.github.com/en/webhooks/webhook-events-and-payloads#merge_group)
 
 ## 2. Daily local development loop
 
@@ -94,18 +98,22 @@ make smee
 ### Triggering and inspecting a handoff end-to-end
 
 1. Open or push a commit to a pull request in your sandbox repository.
-2. `taaro-server` verifies `X-Hub-Signature-256`, deduplicates `X-GitHub-Delivery` in `.data/taaro.db`, responds `202 Accepted`, records the PR observation timestamp, and publishes (with valid installation credentials) a completed `neutral` Check Run named **Taaro Handoff** pinned to the PR's `head_sha`.
-3. Query the observed PR state from the CLI:
+2. `taaro-server` verifies `X-Hub-Signature-256`, deduplicates `X-GitHub-Delivery` in `.data/taaro.db`, responds `202 Accepted`, records the PR observation timestamp, and, for actionable handoffs with installation credentials, publishes a completed `neutral` Check Run named **Taaro Handoff** pinned to the PR's `head_sha`.
+3. Query observed PR state, exchange fixtures, or run awareness checks from the CLI (see [Adapter Protocol v1](PROTOCOL.md) for the full HTTP API):
    ```bash
-   go run ./cmd/taaro health
-   go run ./cmd/taaro context --repo <owner>/<repo> --pr <number>
+   taaro health
+   taaro context --repo <owner>/<repo> --pr <number> --full
+   taaro artifact publish --key compiler/diag --payload '{"span":1}' --command 'test -s "$TAARO_FIXTURE_PATH"'
+   taaro artifact rerun --key compiler/diag --command 'test -s "$TAARO_FIXTURE_PATH"' --record-check --pr <number>
    ```
+
+To run the producer’s command, inspect the immutable version with `taaro artifact get --key compiler/diag --version 1 --json`, then explicitly select it with `taaro artifact rerun --key compiler/diag --version 1 --use-recorded-command`. A recorded check identifies both Git revisions. Commit the project configuration and keep the consumer worktree clean when recording the result. A local-only rerun can use a dirty checkout.
 
 ### Testing clickable `details_url` links
 
 `smee.io` only proxies webhook POSTs. A public HTTPS endpoint lets a Check Run link to the local handoff page. A link for a superseded head returns HTTP 410 once the latest observation moves to another SHA.
 
-The local context API and handoff pages have no reader authentication. Use a public tunnel only with a dedicated public sandbox and database containing public data. Keep private-project readers on a trusted local interface.
+Set `TAARO_API_TOKEN` in `.env` and export it in CLI or adapter shells before using a public address. The same bearer token protects HTML handoff pages and the API. A plain GitHub details link opens the protected URL and requires an authenticated client or access-controlled proxy to supply the token. A direct loopback deployment may omit the token. Use tunnels only with dedicated sandbox data. Keep each instance within one repository access group.
 
 1. Start a Cloudflare quick tunnel:
    ```bash
@@ -119,10 +127,11 @@ The local context API and handoff pages have no reader authentication. Use a pub
 
 ### Offline test suite and webhook fixture harness
 
-Run the full test suite with the race detector:
+Run the full test suite with the race detector, or run the Level 1–3 Adapter Protocol conformance suite directly:
 
 ```bash
 make test
+make conformance
 ```
 
 `internal/webhook/handler_test.go` signs JSON payloads from `internal/webhook/testdata/` with HMAC-SHA256 and verifies:
@@ -145,7 +154,7 @@ make test
 In **GitHub → Settings → Developer settings → GitHub Apps → *Your App* → Advanced → Recent Deliveries**:
 
 - Inspect exact request headers (`X-GitHub-Event`, `X-GitHub-Delivery`, `X-Hub-Signature-256`), raw payload JSON, and `taaro-server`'s response status and body.
-- Click **Redeliver** after a code change. GitHub reuses the original delivery GUID. Taaro skips a delivery already recorded in SQLite. To exercise processing again, trigger a fresh PR event. Acceptance precedes asynchronous publishing, so inspect server logs for publishing failures. [GitHub webhook redelivery](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook)
+- Click **Redeliver** after a code change. GitHub reuses the original delivery GUID. Taaro deduplicates the GUID and retains the verified payload in SQLite until processing succeeds. A single server worker retries failures with backoff and resumes due work on startup. Inspect the server logs and the `pending_webhooks` table for repeated failures. GitHub-side redelivery covers requests the server never accepted. [GitHub webhook redelivery](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook)
 
 ### Inspecting or resetting local SQLite state
 

@@ -8,7 +8,7 @@ This document defines the proposed behavior of Taaro for repository maintainers,
 
 ## 1. Overview and Motivation
 
-Taaro supports two starting points. Maintainers can integrate a repository around its current tests and CI, or create a Git project with Taaro configured before its first commit. Both use the same repository identity and GitHub App installation model. The current CLI, webhook receiver, and optional neutral handoff are available through the [project setup workflow](WORKFLOW.md#using-taaro-in-your-project). Fixture exchange, runtime mediation, and required awareness checks are roadmap capabilities.
+Taaro supports two starting points. Maintainers can integrate a repository around its current tests and CI, or create a Git project with Taaro configured before its first commit. Both use the same repository identity and GitHub App installation model. In Taaro 1.0.0, the CLI, local coordination server, SQLite store, webhook receiver, immutable fixture exchange, check-identity matching, cross-PR overlap detection, Level 1–3 runtime adapter protocol and conformance suite, neutral handoff checks, and experimental awareness check publication are implemented in Go. The reference adapter covers calls routed through it. Live runtime enforcement and branch protection require their respective trials. For setup, see the [project setup workflow](WORKFLOW.md#using-taaro-in-your-project) and [Adapter Protocol v1](PROTOCOL.md). Pilot rollout phases and measurement criteria remain governed by sections 9–10.
 
 A compiler and its editor extension can be developed in parallel once both workers have an example of the diagnostic they must support. A developer returning to a bug can resume investigation once they have its input, command, and last observed result. In both cases, the useful handoff may exist before a branch is ready for review.
 
@@ -126,6 +126,7 @@ Install per repository. The baseline handoff is assembled deterministically from
 | Pull requests, read | Retrieve PR state, diffs, threads, and head SHAs. |
 | Issues, read | Resolve linked goals, labels, and proposal issues. |
 | Checks, read and write | Read verdicts and publish handoff or awareness checks. |
+| Merge queues, read | Receive merge-group check requests. |
 | Contents, read (optional) | Read versioned RFCs, push history, or direct-commit views when enabled. |
 
 Restrict each output to the visibility of its destination. Private titles, paths, excerpts, and session details must stay within their authorized audience. Recheck the reader’s current repository access whenever they open the details page. Expire cached excerpts and promptly purge affected repository data on removal or revocation.
