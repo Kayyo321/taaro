@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,18 +16,20 @@ import (
 
 // Config holds runtime settings for taaro-server.
 type Config struct {
-	ListenAddr     string
-	PublicURL      string
-	AppID          int64
-	AppSlug        string
-	WebhookSecret  string
-	PrivateKeyPath string
-	ClientID       string
-	ClientSecret   string
-	SmeeURL        string
-	DBPath         string
-	DumpWebhooks   string
-	LogLevel       slog.Level
+	ListenAddr           string
+	PublicURL            string
+	AppID                int64
+	AppSlug              string
+	WebhookSecret        string
+	PrivateKeyPath       string
+	ClientID             string
+	ClientSecret         string
+	SmeeURL              string
+	DBPath               string
+	DumpWebhooks         string
+	APIToken             string
+	EnableAwarenessCheck bool
+	LogLevel             slog.Level
 }
 
 // Load reads an optional .env file (without overriding already-exported env vars)
@@ -37,17 +42,19 @@ func Load(envFile string) (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:     envOrDefault("TAARO_LISTEN_ADDR", "127.0.0.1:8080"),
-		PublicURL:      strings.TrimRight(envOrDefault("TAARO_PUBLIC_URL", "http://127.0.0.1:8080"), "/"),
-		AppSlug:        strings.TrimSpace(os.Getenv("TAARO_APP_SLUG")),
-		WebhookSecret:  os.Getenv("TAARO_WEBHOOK_SECRET"),
-		PrivateKeyPath: envOrDefault("TAARO_PRIVATE_KEY_PATH", filepath.Join(".secrets", "taaro-dev.pem")),
-		ClientID:       strings.TrimSpace(os.Getenv("TAARO_CLIENT_ID")),
-		ClientSecret:   os.Getenv("TAARO_CLIENT_SECRET"),
-		SmeeURL:        strings.TrimSpace(os.Getenv("TAARO_SMEE_URL")),
-		DBPath:         envOrDefault("TAARO_DB_PATH", filepath.Join(".data", "taaro.db")),
-		DumpWebhooks:   resolveDumpDir(os.Getenv("TAARO_DUMP_WEBHOOKS")),
-		LogLevel:       parseLogLevel(os.Getenv("TAARO_LOG_LEVEL")),
+		ListenAddr:           envOrDefault("TAARO_LISTEN_ADDR", "127.0.0.1:8080"),
+		PublicURL:            strings.TrimRight(envOrDefault("TAARO_PUBLIC_URL", "http://127.0.0.1:8080"), "/"),
+		AppSlug:              strings.TrimSpace(os.Getenv("TAARO_APP_SLUG")),
+		WebhookSecret:        os.Getenv("TAARO_WEBHOOK_SECRET"),
+		PrivateKeyPath:       envOrDefault("TAARO_PRIVATE_KEY_PATH", filepath.Join(".secrets", "taaro-dev.pem")),
+		ClientID:             strings.TrimSpace(os.Getenv("TAARO_CLIENT_ID")),
+		ClientSecret:         os.Getenv("TAARO_CLIENT_SECRET"),
+		SmeeURL:              strings.TrimSpace(os.Getenv("TAARO_SMEE_URL")),
+		DBPath:               envOrDefault("TAARO_DB_PATH", filepath.Join(".data", "taaro.db")),
+		DumpWebhooks:         resolveDumpDir(os.Getenv("TAARO_DUMP_WEBHOOKS")),
+		APIToken:             strings.TrimSpace(os.Getenv("TAARO_API_TOKEN")),
+		EnableAwarenessCheck: parseBoolEnv(os.Getenv("TAARO_ENABLE_AWARENESS_CHECK")),
+		LogLevel:             parseLogLevel(os.Getenv("TAARO_LOG_LEVEL")),
 	}
 
 	if rawID := strings.TrimSpace(os.Getenv("TAARO_APP_ID")); rawID != "" {
@@ -66,7 +73,29 @@ func (c Config) ValidateServer() error {
 	if strings.TrimSpace(c.WebhookSecret) == "" {
 		return errors.New("TAARO_WEBHOOK_SECRET is required (run `make setup` or set it in .env)")
 	}
+	if c.APIToken == "" && !c.LoopbackOnly() {
+		return errors.New("TAARO_API_TOKEN is required with a non-loopback listen address or public URL")
+	}
+
 	return nil
+}
+
+// LoopbackOnly reports whether both the listener and advertised URL are local.
+func (c Config) LoopbackOnly() bool {
+	host, _, err := net.SplitHostPort(c.ListenAddr)
+	public, parseErr := url.Parse(c.PublicURL)
+	return err == nil && parseErr == nil && loopbackHost(host) && loopbackHost(public.Hostname())
+}
+
+// DirectLoopbackRequest requires a local TCP peer and a local Host header.
+func DirectLoopbackRequest(r *http.Request) bool {
+	peer, _, err := net.SplitHostPort(r.RemoteAddr)
+	return err == nil && net.ParseIP(peer).IsLoopback() && loopbackHost((&url.URL{Host: r.Host}).Hostname()) &&
+		r.Header.Get("Forwarded") == "" && r.Header.Get("X-Forwarded-For") == "" && r.Header.Get("X-Forwarded-Host") == ""
+}
+
+func loopbackHost(host string) bool {
+	return strings.EqualFold(host, "localhost") || net.ParseIP(host).IsLoopback()
 }
 
 // HasGitHubAppAuth reports whether App ID and a private key path are configured.
@@ -103,6 +132,15 @@ func parseLogLevel(raw string) slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
+	}
+}
+
+func parseBoolEnv(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 
